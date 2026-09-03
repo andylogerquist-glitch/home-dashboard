@@ -59,10 +59,10 @@
     border-radius:8px; font-size:clamp(12px,1.1vw,15px); padding:3px 9px; cursor:pointer;
     font-family:inherit;
   }
-
+ 
   .weather-icon{ color:var(--teal); filter: drop-shadow(0 4px 14px rgba(79,209,197,0.25)); flex-shrink:0; }
   .weather-icon svg{ width:100%; height:100%; display:block; }
-
+ 
   /* ---------- Calendar panel: 7 equal columns, today leftmost ---------- */
   #panel-calendar{ flex: 2.3 1 0; }
   .cal-columns{ flex:1; min-height:0; display:grid; grid-template-columns:repeat(7,1fr); gap:clamp(6px,0.9vw,14px); }
@@ -82,7 +82,7 @@
   .cal-event-dot{ width:7px; height:7px; border-radius:50%; flex-shrink:0; margin-top:4px; }
   .cal-empty{ color:var(--ink-dim); font-size:clamp(9px,0.85vw,12px); text-align:center; margin-top:6px; }
   .cal-status{ color:var(--ink-dim); font-size:clamp(10px,1vw,13px); margin-top:8px; flex-shrink:0; }
-
+ 
   /* ---------- Bottom row: Insights / History / Riddle ---------- */
   .bottom-row{ flex:1 1 0; min-height:0; display:grid; grid-template-columns:1fr 1fr 1fr; gap: clamp(10px,1.4vw,20px); }
   .insight-text{ font-size:clamp(11px,1.05vw,14px); line-height:1.55; overflow-y:auto; }
@@ -90,20 +90,32 @@
   .history-item{ font-size:clamp(10px,1vw,13px); line-height:1.4; }
   .history-day{ color:var(--gold); font-weight:700; font-family:'Poppins',sans-serif; margin-right:4px; }
   .panel-placeholder{ color:var(--ink-dim); font-size:clamp(10px,1vw,13px); font-style:italic; }
-
+ 
   #panel-riddle{ cursor:pointer; }
   .riddle-question{ font-size:clamp(12px,1.15vw,16px); line-height:1.5; font-weight:500; }
   .riddle-answer{ margin-top:10px; padding-top:10px; border-top:1px solid var(--line); font-size:clamp(11px,1.05vw,14px); color:var(--teal); font-weight:600; }
   .riddle-answer.hidden{ display:none; }
   .riddle-hint{ margin-top:auto; padding-top:8px; color:var(--ink-dim); font-size:clamp(9px,0.85vw,12px); text-align:center; }
-
+ 
+  /* ---------- Expandable panels (Insights / History) ---------- */
+  .expandable-panel{ cursor:pointer; }
+  .expandable-panel .expand-hint{ margin-top:auto; padding-top:8px; color:var(--ink-dim); font-size:clamp(9px,0.85vw,12px); text-align:center; flex-shrink:0; }
+  .expand-backdrop{ position:fixed; inset:0; background:rgba(4,5,8,0.75); backdrop-filter: blur(3px); z-index:60; display:none; }
+  .expand-backdrop.visible{ display:block; }
+  .expandable-panel.expanded{
+    position:fixed; inset:6vh 6vw; z-index:70;
+    box-shadow: 0 24px 70px rgba(0,0,0,0.6);
+  }
+  .expandable-panel.expanded .insight-text{ font-size:clamp(15px,1.8vw,22px); line-height:1.7; }
+  .expandable-panel.expanded .history-item{ font-size:clamp(13px,1.5vw,18px); line-height:1.6; }
+ 
   /* ---------- Focus ---------- */
   .focusable{ outline:none; }
   .focusable:focus{
     box-shadow: 0 0 0 3px var(--teal);
     border-color: var(--teal) !important;
   }
-
+ 
   /* ---------- Modal ---------- */
   .modal{
     position:fixed; inset:0; background:rgba(6,7,10,0.8); backdrop-filter: blur(4px);
@@ -142,29 +154,31 @@
 </style>
 </head>
 <body>
-
+ 
 <div class="page">
   <section class="panel" id="panel-calendar">
     <h2>7 Day Calendar <span class="header-clock" id="header-clock">—</span><button class="icon-btn focusable" tabindex="0" id="cal-refresh-btn" title="Refresh calendars">⟳</button></h2>
     <div class="cal-columns" id="cal-columns"></div>
     <div class="cal-status" id="cal-status">No calendars configured yet — add one in Settings.</div>
   </section>
-
+ 
   <div class="bottom-row">
-    <section class="panel" id="panel-insights">
+    <section class="panel expandable-panel focusable" id="panel-insights" tabindex="0">
       <h2>Today's Weather Insights <button class="icon-btn focusable" tabindex="0" id="insights-refresh-btn" title="Refresh">⟳</button></h2>
       <div class="insight-text" id="insights-body">
         <div class="panel-placeholder">Loading…</div>
       </div>
+      <div class="expand-hint">Click to expand</div>
     </section>
-
-    <section class="panel" id="panel-history">
+ 
+    <section class="panel expandable-panel focusable" id="panel-history" tabindex="0">
       <h2>This Week in History <button class="icon-btn focusable" tabindex="0" id="history-refresh-btn" title="Refresh">⟳</button></h2>
       <div class="history-list" id="history-body">
         <div class="panel-placeholder">Loading…</div>
       </div>
+      <div class="expand-hint">Click to expand</div>
     </section>
-
+ 
     <section class="panel focusable" id="panel-riddle" tabindex="0">
       <h2>Daily Riddle</h2>
       <div class="riddle-question" id="riddle-question">Loading…</div>
@@ -173,13 +187,15 @@
     </section>
   </div>
 </div>
-
+ 
+<div class="expand-backdrop" id="expand-backdrop"></div>
+ 
 <button class="settings-fab focusable" tabindex="0" id="settings-btn" title="Settings">⚙</button>
-
+ 
 <div class="modal hidden" id="settings-modal">
   <div class="modal-box">
     <h3>Settings</h3>
-
+ 
     <h4>Calendars (Google "Secret address in iCal format")</h4>
     <label style="margin-top:0;">Each calendar gets a default color for its events. If an event has its own color set directly in Google Calendar and that color happens to be exposed in the feed, it will override this default — but Google's private ICS feed usually does not include per-event colors, so most events will just use the calendar's default color below.</label>
     <div id="cal-url-list"></div>
@@ -188,25 +204,25 @@
       <input type="color" id="new-cal-color" value="#4fd1c5">
       <button class="btn focusable" tabindex="0" id="add-cal-btn">Add</button>
     </div>
-
+ 
     <h4>CORS relay (optional but recommended)</h4>
     <label style="margin-top:0;">Your own relay URL (e.g. Cloudflare Worker), used before the public fallbacks</label>
     <div class="row">
       <input type="text" id="relay-url" placeholder="https://ics-proxy.yourname.workers.dev">
       <button class="btn focusable" tabindex="0" id="save-relay-btn">Save</button>
     </div>
-
+ 
     <h4>AI curation for "This Week in History" (optional)</h4>
     <label style="margin-top:0;">URL of your own Cloudflare Worker that calls the Anthropic API with your key (see ai-insights-worker.js). Not required — without it, history facts use a keyword filter instead of AI judgment.</label>
     <div class="row">
       <input type="text" id="ai-endpoint-url" placeholder="https://ai-insights.yourname.workers.dev">
       <button class="btn focusable" tabindex="0" id="save-ai-endpoint-btn">Save</button>
     </div>
-
+ 
     <button class="btn secondary focusable" tabindex="0" id="close-settings-btn" style="margin-top:20px;">Close</button>
   </div>
 </div>
-
+ 
 <script>
 /* ===================== Storage helpers ==========================
    Uses localStorage (not window.storage) because this file is meant
@@ -224,15 +240,15 @@ async function saveJSON(key, val){
   try{ localStorage.setItem(key, JSON.stringify(val)); }
   catch(e){ console.error('save failed', key, e); }
 }
-
+ 
 /* ===================== State ===================== */
 let calendars = [];   // [{id, url, color}]
 let relayUrl = '';    // string, e.g. user's own Cloudflare Worker URL for the CORS relay
 let aiEndpoint = '';  // string, e.g. user's own Cloudflare Worker URL for AI Insights
-
+ 
 const uid = () => Math.random().toString(36).slice(2,10);
 const COLOR_PALETTE = ['#4fd1c5','#f2b134','#ef7d63','#5b8dd6','#9b7ede','#6fcf97'];
-
+ 
 /* ===================== Date / time ===================== */
 function renderClock(){
   const now = new Date();
@@ -242,7 +258,7 @@ function renderClock(){
 }
 renderClock();
 setInterval(renderClock, 15000);
-
+ 
 /* ===================== Weather (Open-Meteo, Prior Lake MN) ===================== */
 const WICON = {
   sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8L6 18M18 6l1.8-1.8"/></svg>',
@@ -281,11 +297,11 @@ function classifyNWSText(shortForecast){
   return { iconKey, desc: shortForecast || '—' };
 }
 function weatherIconSvg(iconKey){ return WICON[iconKey] || WICON.cloud; }
-
+ 
 /* weatherByDate: 'YYYY-MM-DD' -> {hi, lo, precip, iconKey, desc, source} */
 let weatherByDate = {};
 let todaysWeatherNarrative = ''; // NWS's own timing-specific text for today, when available
-
+ 
 async function loadWeatherForecastNWS(){
   // NWS grid coordinates for a fixed lat/lon rarely change, so cache the lookup
   // to avoid an extra relay round-trip on every refresh.
@@ -296,17 +312,17 @@ async function loadWeatherForecastNWS(){
     grid = { forecastUrl: points.properties.forecast };
     await saveJSON('nwsGrid', grid);
   }
-
+ 
   const forecastText = await fetchJSON(grid.forecastUrl);
   const data = JSON.parse(forecastText);
   const periods = data.properties.periods;
   console.log('Raw NWS forecast periods:', periods);
-
+ 
   // The first 1-2 periods cover "today" (e.g. "Today" + "Tonight", or just
   // "This Afternoon" depending on time of day) and already include NWS's own
   // timing-specific narrative — no need to synthesize this ourselves.
   todaysWeatherNarrative = periods.slice(0,2).map(p => p.detailedForecast).filter(Boolean).join(' ');
-
+ 
   const byDate = {};
   for(const p of periods){
     const dateStr = p.startTime.slice(0,10);
@@ -322,7 +338,7 @@ async function loadWeatherForecastNWS(){
       if(!byDate[dateStr].shortForecast) byDate[dateStr].shortForecast = p.shortForecast;
     }
   }
-
+ 
   const result = {};
   for(const dateStr in byDate){
     const e = byDate[dateStr];
@@ -336,7 +352,7 @@ async function loadWeatherForecastNWS(){
   }
   return result;
 }
-
+ 
 async function loadWeatherForecastOpenMeteo(){
   const url = 'https://api.open-meteo.com/v1/forecast?latitude=44.7133&longitude=-93.4258'
     + '&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max'
@@ -353,7 +369,7 @@ async function loadWeatherForecastOpenMeteo(){
   }
   return result;
 }
-
+ 
 async function loadWeatherForecast(){
   try{
     todaysWeatherNarrative = '';
@@ -381,9 +397,9 @@ async function loadWeatherForecast(){
 function dateKey(d){
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-
+ 
 /* ===================== Calendar (ICS via CORS relay) ===================== */
-
+ 
 /* Parse a raw ICS date/date-time value (e.g. "20260818T060000Z", "20260818T060000", "20260818")
    into {date, allDay}, converting UTC (Z-suffixed) values to correct local time. */
 function parseDtValue(raw){
@@ -395,9 +411,9 @@ function parseDtValue(raw){
   const date = m[4] === 'Z' ? new Date(Date.UTC(y, mo, d, hh, mi, ss)) : new Date(y, mo, d, hh, mi, ss);
   return { date, allDay: false };
 }
-
+ 
 const DOW = {SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6};
-
+ 
 /* The Nth occurrence of a weekday in a given month (ordinal can be negative,
    e.g. -1 = last). Returns null if that ordinal doesn't exist in the month
    (e.g. a "5th Monday" that isn't there). */
@@ -414,7 +430,7 @@ function getNthWeekdayOfMonth(year, month, weekdayNum, ordinal){
   }
   return d.getMonth() === month ? d : null;
 }
-
+ 
 /* Expand an RRULE into concrete occurrence Dates that fall within [windowStart, windowEnd].
    Approximate but covers common home-calendar patterns: DAILY/WEEKLY/MONTHLY/YEARLY,
    INTERVAL, COUNT, UNTIL, BYDAY (weekly, and ordinal forms like "4TH"/"-1FR" for monthly),
@@ -430,10 +446,10 @@ function expandRecurrence(dtStart, rruleRaw, exdates, windowStart, windowEnd){
   const isExcluded = (dt) => exdates.some(ex =>
     ex.getFullYear()===dt.getFullYear() && ex.getMonth()===dt.getMonth() &&
     ex.getDate()===dt.getDate() && ex.getHours()===dt.getHours() && ex.getMinutes()===dt.getMinutes());
-
+ 
   const occurrences = [];
   let n = 0, iterations = 0;
-
+ 
   if(freq === 'DAILY'){
     let cur = new Date(dtStart);
     while(iterations++ < safetyLimit){
@@ -475,8 +491,9 @@ function expandRecurrence(dtStart, rruleRaw, exdates, windowStart, windowEnd){
       return { ordinal: m[1] ? parseInt(m[1],10) : 1, weekday: DOW[m[2]] };
     }).filter(Boolean) : null;
     const domList = (!byDayOrdinals && params.BYMONTHDAY) ? params.BYMONTHDAY.split(',').map(Number) : null;
-
+ 
     let cur = new Date(dtStart.getFullYear(), dtStart.getMonth(), 1);
+    outerMonthly:
     while(iterations++ < safetyLimit){
       const dates = [];
       if(byDayOrdinals){
@@ -489,10 +506,13 @@ function expandRecurrence(dtStart, rruleRaw, exdates, windowStart, windowEnd){
       } else {
         dates.push(new Date(cur.getFullYear(), cur.getMonth(), dtStart.getDate()));
       }
+      dates.sort((a,b) => a-b); // chronological order matters for COUNT to be correct
       for(const dRaw of dates){
         const occ = new Date(dRaw.getFullYear(), dRaw.getMonth(), dRaw.getDate(), dtStart.getHours(), dtStart.getMinutes());
         if(occ < dtStart) continue;
-        if(until && occ > until) continue;
+        if(until && occ > until) break outerMonthly;
+        if(n >= count) break outerMonthly;
+        n++;
         if(occ >= windowStart && occ <= windowEnd && !isExcluded(occ)) occurrences.push(occ);
       }
       cur.setMonth(cur.getMonth() + interval);
@@ -509,12 +529,12 @@ function expandRecurrence(dtStart, rruleRaw, exdates, windowStart, windowEnd){
   }
   return occurrences;
 }
-
+ 
 function extractField(body, name){
   const m = body.match(new RegExp(name + '[^:\\r\\n]*:([^\\r\\n]+)'));
   return m ? m[1].trim() : null;
 }
-
+ 
 /* Best-effort per-event color: Google's private ICS feed generally does NOT expose
    per-event color overrides (that requires the Calendar API's colorId field), so this
    will usually just fall through to the calendar's configured default color. Kept here
@@ -524,13 +544,13 @@ function resolveEventColor(body, defaultColor){
   if(raw && /^#?[0-9a-fA-F]{6}$/.test(raw)) return raw.startsWith('#') ? raw : '#'+raw;
   return defaultColor;
 }
-
+ 
 /* Parse ICS text into event occurrences {title, date, endDate, allDay, color}, expanding
    any RRULE into individual occurrences within [windowStart, windowEnd], and resolving
    RECURRENCE-ID overrides so an edited recurring event doesn't show up twice. */
 function parseICS(text, windowStart, windowEnd, defaultColor){
   const blocks = text.split('BEGIN:VEVENT').slice(1).map(b => b.split('END:VEVENT')[0]);
-
+ 
   const parsedBlocks = blocks.map(body => {
     const uid = extractField(body, 'UID');
     const title = extractField(body, 'SUMMARY') || '(untitled)';
@@ -551,7 +571,7 @@ function parseICS(text, windowStart, windowEnd, defaultColor){
     }
     return { uid, title, start, end, recurrenceId, rrule, exdates, color };
   }).filter(Boolean);
-
+ 
   const overridesByUid = {};
   for(const b of parsedBlocks){
     if(b.recurrenceId && b.uid){
@@ -559,7 +579,7 @@ function parseICS(text, windowStart, windowEnd, defaultColor){
       overridesByUid[b.uid].push(b);
     }
   }
-
+ 
   const events = [];
   for(const b of parsedBlocks){
     if(b.recurrenceId){
@@ -581,7 +601,7 @@ function parseICS(text, windowStart, windowEnd, defaultColor){
   }
   return events;
 }
-
+ 
 /* Given an event's start/end, return the list of calendar-day keys (YYYY-MM-DD) it
    covers, clipped to [windowStart, windowEnd]. Handles multi-day (all-day and timed)
    events; ICS all-day DTEND is exclusive, so it's adjusted back by one day. */
@@ -610,7 +630,7 @@ function getEventDayKeys(startDate, endDate, allDay, windowStart, windowEnd){
   }
   return keys;
 }
-
+ 
 /* Try the user's own relay first (set in Settings), then a few free public
    fallbacks; return the first response whose text passes isValid. */
 const PUBLIC_RELAYS = [
@@ -625,7 +645,7 @@ async function fetchViaRelays(url, isValid){
     relays.push(u => base + '?url=' + encodeURIComponent(u));
   }
   relays.push(...PUBLIC_RELAYS);
-
+ 
   let lastErr = null;
   for(const buildProxyUrl of relays){
     try{
@@ -644,14 +664,14 @@ async function fetchICS(url){
 async function fetchJSON(url){
   return fetchViaRelays(url, text => { try{ JSON.parse(text); return true; }catch{ return false; } });
 }
-
+ 
 let lastLoadedDays = null; // cached for Insights/History reuse
-
+ 
 async function loadCalendars(){
   const colsEl = document.getElementById('cal-columns');
   const statusEl = document.getElementById('cal-status');
   colsEl.innerHTML = '';
-
+ 
   const today = new Date(); today.setHours(0,0,0,0);
   const windowStart = new Date(today);
   const windowEnd = new Date(today); windowEnd.setDate(windowEnd.getDate()+7); windowEnd.setMilliseconds(-1);
@@ -660,9 +680,9 @@ async function loadCalendars(){
     const d = new Date(today); d.setDate(d.getDate()+i);
     days.push({date:d, events:[]});
   }
-
+ 
   await loadWeatherForecast();
-
+ 
   if(calendars.length === 0){
     statusEl.textContent = 'No calendars configured yet — add one in Settings.';
   } else {
@@ -691,14 +711,14 @@ async function loadCalendars(){
       ? failures.length + ' calendar(s) failed to load: ' + failures.join(' | ')
       : '';
   }
-
+ 
   for(const day of days){
     day.events.sort((a,b)=>a.date-b.date);
     const wx = weatherByDate[dateKey(day.date)];
-
+ 
     const col = document.createElement('div');
     col.className = 'cal-col';
-
+ 
     const header = document.createElement('div');
     header.className = 'cal-col-header';
     const title = document.createElement('div');
@@ -714,7 +734,7 @@ async function loadCalendars(){
       header.appendChild(wxEl);
     }
     col.appendChild(header);
-
+ 
     const evWrap = document.createElement('div');
     evWrap.className = 'cal-col-events';
     if(day.events.length === 0){
@@ -739,11 +759,11 @@ async function loadCalendars(){
     col.appendChild(evWrap);
     colsEl.appendChild(col);
   }
-
+ 
   lastLoadedDays = days;
   loadInsights();
 }
-
+ 
 /* ===================== Settings modal: calendars, relay, AI endpoint ===================== */
 function renderCalUrlList(){
   const el = document.getElementById('cal-url-list');
@@ -766,7 +786,7 @@ function renderCalUrlList(){
     el.appendChild(row);
   });
 }
-
+ 
 document.getElementById('add-cal-btn').onclick = () => {
   const url = document.getElementById('new-cal-url').value.trim();
   if(!url) return;
@@ -777,40 +797,40 @@ document.getElementById('add-cal-btn').onclick = () => {
   renderCalUrlList();
   loadCalendars();
 };
-
+ 
 document.getElementById('save-relay-btn').onclick = () => {
   relayUrl = document.getElementById('relay-url').value.trim();
   saveJSON('relayUrl', relayUrl);
   loadCalendars();
 };
-
+ 
 document.getElementById('save-ai-endpoint-btn').onclick = () => {
   aiEndpoint = document.getElementById('ai-endpoint-url').value.trim();
   saveJSON('aiEndpoint', aiEndpoint);
   loadInsights();
 };
-
+ 
 document.getElementById('cal-refresh-btn').onclick = loadCalendars;
 document.getElementById('insights-refresh-btn').onclick = loadInsights;
 document.getElementById('history-refresh-btn').onclick = loadHistory;
-
+ 
 const modal = document.getElementById('settings-modal');
 document.getElementById('settings-btn').onclick = () => { modal.classList.remove('hidden'); };
 document.getElementById('close-settings-btn').onclick = () => { modal.classList.add('hidden'); };
-
+ 
 /* ===================== Insights (calls the user's own AI Worker) ===================== */
 function loadInsights(){
   const body = document.getElementById('insights-body');
   const today = new Date();
   const wx = weatherByDate[dateKey(today)];
-
+ 
   if(todaysWeatherNarrative){
     // NWS's own forecaster-written text already covers timing (e.g. "showers
     // likely before 10am, then gradually clearing") — use it directly.
     body.textContent = todaysWeatherNarrative;
     return;
   }
-
+ 
   if(wx){
     // Fallback when running on Open-Meteo (no narrative text available): a
     // plain synthesized summary from the daily hi/lo/precip/description we do have.
@@ -819,17 +839,17 @@ function loadInsights(){
     body.textContent = `${wx.desc} today, with a high of ${wx.hi}° and a low of ${wx.lo}°.${rainNote}`;
     return;
   }
-
+ 
   body.innerHTML = '<div class="panel-placeholder">Weather data not loaded yet.</div>';
 }
-
+ 
 /* ===================== This Week in History (Wikipedia, no key needed) ===================== */
 /* Keyword filter: screens out obviously minor tragedy/accident language as a
    zero-setup baseline. Imperfect by nature — it can't tell "the Titanic sank"
    (significant) from "a ferry sank, killing 12" (not) just from wording, which
    is exactly what the optional AI curation step below is for. */
 const HISTORY_BLOCKLIST = /\b(kill(ed|s)?|murder(ed)?|assassinat\w*|die[sd]?|death[s]?|crash(ed)?|disaster|accident|drown(ed|s)?|shooting|shot dead|explo(sion|des?)|collapse[sd]?|stampede|derail\w*|wreck(ed)?)\b/i;
-
+ 
 async function loadHistory(){
   const body = document.getElementById('history-body');
   body.innerHTML = '<div class="panel-placeholder">Loading…</div>';
@@ -852,13 +872,13 @@ async function loadHistory(){
       body.innerHTML = '<div class="panel-placeholder">No history facts available.</div>';
       return;
     }
-
+ 
     // Baseline: keyword-filtered first pick per day (works with zero setup).
     let items = dayCandidates.map(({label, candidates}) => {
       const pick = candidates.find(c => !HISTORY_BLOCKLIST.test(c.text)) || candidates[0];
       return { label, year: pick.year, text: pick.text };
     });
-
+ 
     // Upgrade: if an AI Insights endpoint is configured, ask it to pick the most
     // genuinely significant/educational candidate per day instead (better judgment
     // than a keyword list — e.g. it can keep "the Titanic sank" but drop a minor
@@ -878,7 +898,7 @@ async function loadHistory(){
         }
       }catch(e){ console.error('AI history curation failed, using keyword-filtered fallback:', e); }
     }
-
+ 
     body.innerHTML = '';
     items.slice(0,5).forEach(item=>{
       const el = document.createElement('div');
@@ -891,7 +911,7 @@ async function loadHistory(){
     body.innerHTML = '<div class="panel-placeholder">Couldn\'t load history facts.</div>';
   }
 }
-
+ 
 /* ===================== Daily Riddle (local, deterministic per day) ===================== */
 const RIDDLES = [
   ['What has keys but can\'t open locks?', 'A piano.'],
@@ -947,7 +967,44 @@ function toggleRiddle(){
 const riddlePanel = document.getElementById('panel-riddle');
 riddlePanel.addEventListener('click', toggleRiddle);
 riddlePanel.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleRiddle(); } });
-
+ 
+/* ===================== Expandable panels (Insights / History) =====================
+   Click (or Enter/Space) anywhere on the panel to blow it up to a much larger
+   overlay for easier reading without needing to scroll via a TV remote. Clicking
+   the refresh (⟳) button inside still just refreshes, without toggling expand. */
+const expandBackdrop = document.getElementById('expand-backdrop');
+function collapseExpandedPanel(){
+  document.querySelectorAll('.expandable-panel.expanded').forEach(p => {
+    p.classList.remove('expanded');
+    const hint = p.querySelector('.expand-hint');
+    if(hint) hint.textContent = 'Click to expand';
+  });
+  expandBackdrop.classList.remove('visible');
+}
+function toggleExpandPanel(panel){
+  const wasExpanded = panel.classList.contains('expanded');
+  collapseExpandedPanel(); // only one panel expanded at a time
+  if(!wasExpanded){
+    panel.classList.add('expanded');
+    const hint = panel.querySelector('.expand-hint');
+    if(hint) hint.textContent = 'Click to collapse';
+    expandBackdrop.classList.add('visible');
+  }
+}
+document.querySelectorAll('.expandable-panel').forEach(panel => {
+  panel.addEventListener('click', (e) => {
+    if(e.target.closest('.icon-btn')) return; // let refresh buttons work without toggling expand
+    toggleExpandPanel(panel);
+  });
+  panel.addEventListener('keydown', (e) => {
+    if((e.key === 'Enter' || e.key === ' ') && !e.target.closest('.icon-btn')){
+      e.preventDefault();
+      toggleExpandPanel(panel);
+    }
+  });
+});
+expandBackdrop.addEventListener('click', collapseExpandedPanel);
+ 
 /* ===================== D-pad / keyboard spatial navigation ===================== */
 function getFocusables(){
   return Array.from(document.querySelectorAll('.focusable'))
@@ -982,7 +1039,7 @@ document.addEventListener('keydown', (e)=>{
   }
   if(best){ best.focus(); e.preventDefault(); }
 });
-
+ 
 /* ===================== Init ===================== */
 async function init(){
   // Migrate the old plain-string calUrls list to the new {url, color} shape, if present.
@@ -1002,7 +1059,7 @@ async function init(){
   loadCalendars(); // also triggers loadInsights() once calendar data is in
 }
 init();
-
+ 
 // Hourly refresh so the 7-day window and weather forecast stay current
 setInterval(() => { loadCalendars(); loadHistory(); loadRiddle(); }, 60*60*1000);
 </script>
