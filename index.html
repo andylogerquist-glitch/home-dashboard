@@ -86,6 +86,11 @@
   /* ---------- Bottom row: Insights / History / Riddle ---------- */
   .bottom-row{ flex:1 1 0; min-height:0; display:grid; grid-template-columns:1fr 1fr 1fr; gap: clamp(10px,1.4vw,20px); }
   .insight-text{ font-size:clamp(11px,1.05vw,14px); line-height:1.55; overflow-y:auto; }
+  .insight-current{ display:flex; align-items:center; gap:8px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  .insight-current .weather-icon{ width:clamp(22px,2.1vw,30px); height:clamp(22px,2.1vw,30px); }
+  .insight-current-temp{ font-family:'Poppins',sans-serif; font-weight:700; font-size:clamp(16px,1.6vw,22px); }
+  .insight-current-desc{ color:var(--ink-dim); font-size:clamp(10px,1vw,13px); }
+  .insight-narrative{ /* inherits .insight-text sizing */ }
   .history-list{ display:flex; flex-direction:column; gap:8px; overflow-y:auto; }
   .history-item{ font-size:clamp(10px,1vw,13px); line-height:1.4; }
   .history-day{ color:var(--gold); font-weight:700; font-family:'Poppins',sans-serif; margin-right:4px; }
@@ -172,7 +177,7 @@
     </section>
  
     <section class="panel expandable-panel focusable" id="panel-history" tabindex="0">
-      <h2>This Week in History <button class="icon-btn focusable" tabindex="0" id="history-refresh-btn" title="Refresh">⟳</button></h2>
+      <h2>Fact of the Day <button class="icon-btn focusable" tabindex="0" id="history-refresh-btn" title="Refresh">⟳</button></h2>
       <div class="history-list" id="history-body">
         <div class="panel-placeholder">Loading…</div>
       </div>
@@ -212,13 +217,6 @@
       <button class="btn focusable" tabindex="0" id="save-relay-btn">Save</button>
     </div>
  
-    <h4>AI curation for "This Week in History" (optional)</h4>
-    <label style="margin-top:0;">URL of your own Cloudflare Worker that calls the Anthropic API with your key (see ai-insights-worker.js). Not required — without it, history facts use a keyword filter instead of AI judgment.</label>
-    <div class="row">
-      <input type="text" id="ai-endpoint-url" placeholder="https://ai-insights.yourname.workers.dev">
-      <button class="btn focusable" tabindex="0" id="save-ai-endpoint-btn">Save</button>
-    </div>
- 
     <button class="btn secondary focusable" tabindex="0" id="close-settings-btn" style="margin-top:20px;">Close</button>
   </div>
 </div>
@@ -244,7 +242,6 @@ async function saveJSON(key, val){
 /* ===================== State ===================== */
 let calendars = [];   // [{id, url, color}]
 let relayUrl = '';    // string, e.g. user's own Cloudflare Worker URL for the CORS relay
-let aiEndpoint = '';  // string, e.g. user's own Cloudflare Worker URL for AI Insights
  
 const uid = () => Math.random().toString(36).slice(2,10);
 const COLOR_PALETTE = ['#4fd1c5','#f2b134','#ef7d63','#5b8dd6','#9b7ede','#6fcf97'];
@@ -370,6 +367,24 @@ async function loadWeatherForecastOpenMeteo(){
   return result;
 }
  
+/* currentConditions: {temp, iconKey, desc} for "right now" — kept separate from
+   the daily forecast source above, since Open-Meteo's current-conditions endpoint
+   is simple, CORS-open (no relay needed), and this doesn't touch the 7-day panel. */
+let currentConditions = null;
+async function loadCurrentConditions(){
+  try{
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=44.7133&longitude=-93.4258'
+      + '&current=temperature_2m,weather_code&temperature_unit=fahrenheit&timezone=America%2FChicago';
+    const res = await fetch(url);
+    const data = await res.json();
+    const { iconKey, desc } = classifyOpenMeteo(data.current.weather_code);
+    currentConditions = { temp: Math.round(data.current.temperature_2m), iconKey, desc };
+  }catch(e){
+    console.error('Current conditions failed:', e);
+    currentConditions = null;
+  }
+}
+ 
 async function loadWeatherForecast(){
   try{
     todaysWeatherNarrative = '';
@@ -385,6 +400,7 @@ async function loadWeatherForecast(){
       return;
     }
   }
+  await loadCurrentConditions();
   // Sanity check regardless of source — flag (but still show) anything wildly
   // off for Prior Lake, MN, since a bad data point should be loud, not silent.
   for(const dateStr in weatherByDate){
@@ -804,111 +820,99 @@ document.getElementById('save-relay-btn').onclick = () => {
   loadCalendars();
 };
  
-document.getElementById('save-ai-endpoint-btn').onclick = () => {
-  aiEndpoint = document.getElementById('ai-endpoint-url').value.trim();
-  saveJSON('aiEndpoint', aiEndpoint);
-  loadInsights();
-};
- 
 document.getElementById('cal-refresh-btn').onclick = loadCalendars;
 document.getElementById('insights-refresh-btn').onclick = loadInsights;
-document.getElementById('history-refresh-btn').onclick = loadHistory;
+document.getElementById('history-refresh-btn').onclick = loadFactOfDay;
  
 const modal = document.getElementById('settings-modal');
 document.getElementById('settings-btn').onclick = () => { modal.classList.remove('hidden'); };
 document.getElementById('close-settings-btn').onclick = () => { modal.classList.add('hidden'); };
  
-/* ===================== Insights (calls the user's own AI Worker) ===================== */
+/* ===================== Today's Weather Insights ===================== */
 function loadInsights(){
   const body = document.getElementById('insights-body');
   const today = new Date();
   const wx = weatherByDate[dateKey(today)];
  
+  const currentLine = currentConditions
+    ? `<div class="insight-current"><span class="weather-icon">${weatherIconSvg(currentConditions.iconKey)}</span>`
+      + `<span class="insight-current-temp">${currentConditions.temp}°</span>`
+      + `<span class="insight-current-desc">${currentConditions.desc}</span></div>`
+    : '';
+ 
+  let narrative;
   if(todaysWeatherNarrative){
     // NWS's own forecaster-written text already covers timing (e.g. "showers
     // likely before 10am, then gradually clearing") — use it directly.
-    body.textContent = todaysWeatherNarrative;
-    return;
-  }
- 
-  if(wx){
+    narrative = todaysWeatherNarrative;
+  } else if(wx){
     // Fallback when running on Open-Meteo (no narrative text available): a
     // plain synthesized summary from the daily hi/lo/precip/description we do have.
     const rainNote = wx.precip >= 40 ? ` There's a fair chance of rain (${wx.precip}%), so keep an eye on the sky.`
       : wx.precip >= 15 ? ` A slight chance of rain (${wx.precip}%) today.` : '';
-    body.textContent = `${wx.desc} today, with a high of ${wx.hi}° and a low of ${wx.lo}°.${rainNote}`;
-    return;
+    narrative = `${wx.desc} today, with a high of ${wx.hi}° and a low of ${wx.lo}°.${rainNote}`;
   }
  
-  body.innerHTML = '<div class="panel-placeholder">Weather data not loaded yet.</div>';
+  if(!currentLine && !narrative){
+    body.innerHTML = '<div class="panel-placeholder">Weather data not loaded yet.</div>';
+    return;
+  }
+  body.innerHTML = currentLine + (narrative ? `<div class="insight-narrative">${narrative}</div>` : '');
 }
  
-/* ===================== This Week in History (Wikipedia, no key needed) ===================== */
-/* Keyword filter: screens out obviously minor tragedy/accident language as a
-   zero-setup baseline. Imperfect by nature — it can't tell "the Titanic sank"
-   (significant) from "a ferry sank, killing 12" (not) just from wording, which
-   is exactly what the optional AI curation step below is for. */
+/* ===================== Fact of the Day (Wikipedia "Did You Know", no key needed) ===================== */
+/* Keyword filter kept as a safety net on whichever fallback path ends up used
+   below — it's not really needed for DYK hooks (already editorially curated),
+   but the on-this-day fallback can still surface accident/violence-heavy facts. */
 const HISTORY_BLOCKLIST = /\b(kill(ed|s)?|murder(ed)?|assassinat\w*|die[sd]?|death[s]?|crash(ed)?|disaster|accident|drown(ed|s)?|shooting|shot dead|explo(sion|des?)|collapse[sd]?|stampede|derail\w*|wreck(ed)?)\b/i;
  
-async function loadHistory(){
+function stripHtml(html){
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return (tmp.textContent || tmp.innerText || '').trim();
+}
+ 
+async function loadFactOfDay(){
   const body = document.getElementById('history-body');
   body.innerHTML = '<div class="panel-placeholder">Loading…</div>';
   try{
-    const today = new Date(); today.setHours(0,0,0,0);
-    const dayCandidates = []; // [{label, candidates: [{year, text}]}]
-    for(let i=0;i<7;i++){
-      const d = new Date(today); d.setDate(d.getDate()+i);
-      const mm = String(d.getMonth()+1).padStart(2,'0');
-      const dd = String(d.getDate()).padStart(2,'0');
-      const label = d.toLocaleDateString(undefined,{weekday:'short', month:'numeric', day:'numeric'});
-      try{
-        const res = await fetch(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/selected/${mm}/${dd}`);
-        const data = await res.json();
-        const candidates = (data.selected || []).slice(0,6).map(e => ({ year: e.year, text: e.text }));
-        if(candidates.length) dayCandidates.push({ label, candidates });
-      }catch(e){ console.error('History fetch failed for', mm, dd, e); }
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth()+1).padStart(2,'0');
+    const dd = String(today.getDate()).padStart(2,'0');
+ 
+    // Wikipedia's aggregated featured-content feed. The "dyk" (Did You Know) field
+    // isn't part of the officially documented endpoint shape for every language
+    // edition, so this is written defensively — if it's missing, fall back to an
+    // on-this-day fact rather than showing nothing.
+    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/feed/featured/${yyyy}/${mm}/${dd}`);
+    const data = await res.json();
+ 
+    let factText = null;
+    const dykHooks = data?.dyk?.hooks || data?.dyk?.facts || (Array.isArray(data?.dyk) ? data.dyk : null);
+    if(Array.isArray(dykHooks) && dykHooks.length){
+      const texts = dykHooks.map(h => stripHtml(h.html || h.text || '')).filter(Boolean);
+      factText = texts.find(t => !HISTORY_BLOCKLIST.test(t)) || texts[0];
     }
-    if(dayCandidates.length === 0){
-      body.innerHTML = '<div class="panel-placeholder">No history facts available.</div>';
+ 
+    if(factText){
+      body.innerHTML = `<div class="history-item">${factText}</div>`;
       return;
     }
  
-    // Baseline: keyword-filtered first pick per day (works with zero setup).
-    let items = dayCandidates.map(({label, candidates}) => {
-      const pick = candidates.find(c => !HISTORY_BLOCKLIST.test(c.text)) || candidates[0];
-      return { label, year: pick.year, text: pick.text };
-    });
- 
-    // Upgrade: if an AI Insights endpoint is configured, ask it to pick the most
-    // genuinely significant/educational candidate per day instead (better judgment
-    // than a keyword list — e.g. it can keep "the Titanic sank" but drop a minor
-    // local accident even though both mention similar words).
-    if(aiEndpoint){
-      try{
-        const res = await fetch(aiEndpoint, {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ type: 'history', days: dayCandidates })
-        });
-        if(res.ok){
-          const data = await res.json();
-          if(Array.isArray(data.selections) && data.selections.length){
-            items = data.selections;
-          }
-        }
-      }catch(e){ console.error('AI history curation failed, using keyword-filtered fallback:', e); }
+    // Fallback: today's "on this day" event, since DYK wasn't available.
+    const otdRes = await fetch(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/selected/${mm}/${dd}`);
+    const otdData = await otdRes.json();
+    const candidates = (otdData.selected || []).map(e => ({ year: e.year, text: e.text }));
+    if(candidates.length === 0){
+      body.innerHTML = '<div class="panel-placeholder">No fact available today.</div>';
+      return;
     }
- 
-    body.innerHTML = '';
-    items.slice(0,5).forEach(item=>{
-      const el = document.createElement('div');
-      el.className = 'history-item';
-      el.innerHTML = `<span class="history-day">${item.label}</span>${item.year} — ${item.text}`;
-      body.appendChild(el);
-    });
+    const pick = candidates.find(c => !HISTORY_BLOCKLIST.test(c.text)) || candidates[0];
+    body.innerHTML = `<div class="history-item">${pick.year} — ${pick.text}</div>`;
   }catch(e){
-    console.error('History load failed:', e);
-    body.innerHTML = '<div class="panel-placeholder">Couldn\'t load history facts.</div>';
+    console.error('Fact of the Day load failed:', e);
+    body.innerHTML = '<div class="panel-placeholder">Couldn\'t load a fact right now.</div>';
   }
 }
  
@@ -1050,18 +1054,16 @@ async function init(){
     if(calendars.length) saveJSON('calendars', calendars);
   }
   relayUrl = await loadJSON('relayUrl', '');
-  aiEndpoint = await loadJSON('aiEndpoint', '');
   document.getElementById('relay-url').value = relayUrl;
-  document.getElementById('ai-endpoint-url').value = aiEndpoint;
   renderCalUrlList();
   loadRiddle();
-  loadHistory();
+  loadFactOfDay();
   loadCalendars(); // also triggers loadInsights() once calendar data is in
 }
 init();
  
 // Hourly refresh so the 7-day window and weather forecast stay current
-setInterval(() => { loadCalendars(); loadHistory(); loadRiddle(); }, 60*60*1000);
+setInterval(() => { loadCalendars(); loadFactOfDay(); loadRiddle(); }, 60*60*1000);
 </script>
 </body>
 </html>
