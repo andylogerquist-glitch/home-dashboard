@@ -64,7 +64,7 @@
   .weather-icon svg{ width:100%; height:100%; display:block; }
  
   /* ---------- Calendar panel: 7 equal columns, today leftmost ---------- */
-  #panel-calendar{ flex: 2.3 1 0; }
+  #panel-calendar{ flex: 1.9 1 0; }
   .cal-columns{ flex:1; min-height:0; display:grid; grid-template-columns:repeat(7,1fr); gap:clamp(6px,0.9vw,14px); }
   .cal-col{ display:flex; flex-direction:column; min-width:0; min-height:0; border-right:1px solid var(--line); padding-right:clamp(6px,0.9vw,14px); }
   .cal-col:last-child{ border-right:none; padding-right:0; }
@@ -84,15 +84,15 @@
   .cal-status{ color:var(--ink-dim); font-size:clamp(10px,1vw,13px); margin-top:8px; flex-shrink:0; }
  
   /* ---------- Bottom row: Insights / History / Riddle ---------- */
-  .bottom-row{ flex:1 1 0; min-height:0; display:grid; grid-template-columns:1fr 1fr 1fr; gap: clamp(10px,1.4vw,20px); }
-  .insight-text{ font-size:clamp(11px,1.05vw,14px); line-height:1.55; overflow-y:auto; }
-  .insight-current{ display:flex; align-items:center; gap:8px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--line); }
-  .insight-current .weather-icon{ width:clamp(22px,2.1vw,30px); height:clamp(22px,2.1vw,30px); }
-  .insight-current-temp{ font-family:'Poppins',sans-serif; font-weight:700; font-size:clamp(16px,1.6vw,22px); }
+  .bottom-row{ flex:1.4 1 0; min-height:0; display:grid; grid-template-columns:1fr 1fr 1fr; gap: clamp(10px,1.4vw,20px); }
+  .insight-text{ font-size:clamp(13px,1.3vw,17px); line-height:1.5; overflow-y:auto; }
+  .insight-current{ display:flex; align-items:center; gap:6px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+  .insight-current .weather-icon{ width:clamp(18px,1.7vw,24px); height:clamp(18px,1.7vw,24px); }
+  .insight-current-temp{ font-family:'Poppins',sans-serif; font-weight:700; font-size:clamp(14px,1.4vw,18px); }
   .insight-current-desc{ color:var(--ink-dim); font-size:clamp(10px,1vw,13px); }
   .insight-narrative{ /* inherits .insight-text sizing */ }
   .history-list{ display:flex; flex-direction:column; gap:8px; overflow-y:auto; }
-  .history-item{ font-size:clamp(10px,1vw,13px); line-height:1.4; }
+  .history-item{ font-size:clamp(13px,1.3vw,17px); line-height:1.5; }
   .history-day{ color:var(--gold); font-weight:700; font-family:'Poppins',sans-serif; margin-right:4px; }
   .panel-placeholder{ color:var(--ink-dim); font-size:clamp(10px,1vw,13px); font-style:italic; }
  
@@ -111,8 +111,8 @@
     position:fixed; inset:6vh 6vw; z-index:70;
     box-shadow: 0 24px 70px rgba(0,0,0,0.6);
   }
-  .expandable-panel.expanded .insight-text{ font-size:clamp(15px,1.8vw,22px); line-height:1.7; }
-  .expandable-panel.expanded .history-item{ font-size:clamp(13px,1.5vw,18px); line-height:1.6; }
+  .expandable-panel.expanded .insight-text{ font-size:clamp(18px,2.1vw,26px); line-height:1.7; }
+  .expandable-panel.expanded .history-item{ font-size:clamp(18px,2.1vw,26px); line-height:1.6; }
  
   /* ---------- Focus ---------- */
   .focusable{ outline:none; }
@@ -412,6 +412,17 @@ async function loadWeatherForecast(){
 }
 function dateKey(d){
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+ 
+/* Compact event-time format, e.g. "9:00a" / "6:15p" instead of "9:00 AM" — saves
+   a little width in the narrow calendar columns. */
+function formatEventTime(date){
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2,'0');
+  const suffix = hours >= 12 ? 'p' : 'a';
+  hours = hours % 12;
+  if(hours === 0) hours = 12;
+  return `${hours}:${minutes}${suffix}`;
 }
  
 /* ===================== Calendar (ICS via CORS relay) ===================== */
@@ -765,7 +776,7 @@ async function loadCalendars(){
         dot.className = 'cal-event-dot';
         dot.style.background = ev.color || '#4fd1c5';
         const txt = document.createElement('span');
-        const timeStr = ev.allDay || ev.isContinuation ? '' : ev.date.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}) + ' ';
+        const timeStr = ev.allDay || ev.isContinuation ? '' : formatEventTime(ev.date) + ' ';
         const prefix = (ev.isContinuation && !ev.allDay) ? '↳ ' : '';
         txt.textContent = prefix + timeStr + ev.title;
         line.appendChild(dot); line.appendChild(txt);
@@ -1067,3 +1078,4 @@ setInterval(() => { loadCalendars(); loadFactOfDay(); loadRiddle(); }, 60*60*100
 </script>
 </body>
 </html>
+ 
