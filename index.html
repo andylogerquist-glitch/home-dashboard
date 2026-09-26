@@ -871,60 +871,48 @@ function loadInsights(){
   body.innerHTML = currentLine + (narrative ? `<div class="insight-narrative">${narrative}</div>` : '');
 }
  
-/* ===================== Fact of the Day (Wikipedia "Did You Know", no key needed) ===================== */
-/* Keyword filter kept as a safety net on whichever fallback path ends up used
-   below — it's not really needed for DYK hooks (already editorially curated),
-   but the on-this-day fallback can still surface accident/violence-heavy facts. */
-const HISTORY_BLOCKLIST = /\b(kill(ed|s)?|murder(ed)?|assassinat\w*|die[sd]?|death[s]?|crash(ed)?|disaster|accident|drown(ed|s)?|shooting|shot dead|explo(sion|des?)|collapse[sd]?|stampede|derail\w*|wreck(ed)?)\b/i;
+/* ===================== Fact of the Day (cat/dog facts, no key needed) =====================
+   Rotates between catfact.ninja and dogapi.dog day to day — both confirmed live,
+   CORS-friendly, no API key. A keyword filter screens out the occasional
+   bite/attack-flavored fact these community-sourced pools can contain, and if
+   the day's primary source comes back empty, it tries the other animal before
+   giving up. */
+const ANIMAL_FACT_BLOCKLIST = /\b(bit(e|es|ing)?|attack(s|ed|ing)?|kill(s|ed|ing)?|aggressi\w*|blood\w*|injur\w*|wound\w*)\b/i;
  
-function stripHtml(html){
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  return (tmp.textContent || tmp.innerText || '').trim();
+async function fetchCatFacts(){
+  const res = await fetch('https://catfact.ninja/facts?limit=5');
+  const data = await res.json();
+  return (data.data || []).map(f => f.fact).filter(Boolean);
+}
+async function fetchDogFacts(){
+  const res = await fetch('https://dogapi.dog/api/v2/facts?limit=5');
+  const data = await res.json();
+  return (data.data || []).map(item => item?.attributes?.body).filter(Boolean);
 }
  
 async function loadFactOfDay(){
   const body = document.getElementById('history-body');
   body.innerHTML = '<div class="panel-placeholder">Loading…</div>';
-  try{
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth()+1).padStart(2,'0');
-    const dd = String(today.getDate()).padStart(2,'0');
  
-    // Wikipedia's aggregated featured-content feed. The "dyk" (Did You Know) field
-    // isn't part of the officially documented endpoint shape for every language
-    // edition, so this is written defensively — if it's missing, fall back to an
-    // on-this-day fact rather than showing nothing.
-    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/feed/featured/${yyyy}/${mm}/${dd}`);
-    const data = await res.json();
+  // Alternate which animal is "today's" primary source, day to day.
+  const idx = dayOfYear(new Date());
+  const sources = idx % 2 === 0
+    ? [{ label: '🐱', fetcher: fetchCatFacts }, { label: '🐶', fetcher: fetchDogFacts }]
+    : [{ label: '🐶', fetcher: fetchDogFacts }, { label: '🐱', fetcher: fetchCatFacts }];
  
-    let factText = null;
-    const dykHooks = data?.dyk?.hooks || data?.dyk?.facts || (Array.isArray(data?.dyk) ? data.dyk : null);
-    if(Array.isArray(dykHooks) && dykHooks.length){
-      const texts = dykHooks.map(h => stripHtml(h.html || h.text || '')).filter(Boolean);
-      factText = texts.find(t => !HISTORY_BLOCKLIST.test(t)) || texts[0];
+  for(const { label, fetcher } of sources){
+    try{
+      const facts = await fetcher();
+      const pick = facts.find(f => !ANIMAL_FACT_BLOCKLIST.test(f));
+      if(pick){
+        body.innerHTML = `<div class="history-item">${label} ${pick}</div>`;
+        return;
+      }
+    }catch(e){
+      console.error('Fact of the Day source failed:', e);
     }
- 
-    if(factText){
-      body.innerHTML = `<div class="history-item">${factText}</div>`;
-      return;
-    }
- 
-    // Fallback: today's "on this day" event, since DYK wasn't available.
-    const otdRes = await fetch(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/selected/${mm}/${dd}`);
-    const otdData = await otdRes.json();
-    const candidates = (otdData.selected || []).map(e => ({ year: e.year, text: e.text }));
-    if(candidates.length === 0){
-      body.innerHTML = '<div class="panel-placeholder">No fact available today.</div>';
-      return;
-    }
-    const pick = candidates.find(c => !HISTORY_BLOCKLIST.test(c.text)) || candidates[0];
-    body.innerHTML = `<div class="history-item">${pick.year} — ${pick.text}</div>`;
-  }catch(e){
-    console.error('Fact of the Day load failed:', e);
-    body.innerHTML = '<div class="panel-placeholder">Couldn\'t load a fact right now.</div>';
   }
+  body.innerHTML = '<div class="panel-placeholder">Couldn\'t load a fact right now.</div>';
 }
  
 /* ===================== Daily Riddle (local, deterministic per day) ===================== */
@@ -1078,4 +1066,3 @@ setInterval(() => { loadCalendars(); loadFactOfDay(); loadRiddle(); }, 60*60*100
 </script>
 </body>
 </html>
- 
