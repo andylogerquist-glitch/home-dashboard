@@ -878,14 +878,19 @@ function loadInsights(){
    the day's primary source comes back empty, it tries the other animal before
    giving up. */
 const ANIMAL_FACT_BLOCKLIST = /\b(bit(e|es|ing)?|attack(s|ed|ing)?|kill(s|ed|ing)?|aggressi\w*|blood\w*|injur\w*|wound\w*)\b/i;
+const FACT_HISTORY_KEY = 'factHistory';
+const FACT_HISTORY_MAX = 60; // ~2 months of daily facts before anything can repeat
+ 
+// Normalized comparison key so near-identical whitespace/punctuation still counts as "seen".
+function factKey(text){ return text.toLowerCase().replace(/[^a-z0-9]/g,''); }
  
 async function fetchCatFacts(){
-  const res = await fetch('https://catfact.ninja/facts?limit=5');
+  const res = await fetch('https://catfact.ninja/facts?limit=30');
   const data = await res.json();
   return (data.data || []).map(f => f.fact).filter(Boolean);
 }
 async function fetchDogFacts(){
-  const res = await fetch('https://dogapi.dog/api/v2/facts?limit=5');
+  const res = await fetch('https://dogapi.dog/api/v2/facts?limit=30');
   const data = await res.json();
   return (data.data || []).map(item => item?.attributes?.body).filter(Boolean);
 }
@@ -894,23 +899,37 @@ async function loadFactOfDay(){
   const body = document.getElementById('history-body');
   body.innerHTML = '<div class="panel-placeholder">Loading…</div>';
  
+  const history = await loadJSON(FACT_HISTORY_KEY, []);
+  const historySet = new Set(history);
+ 
   // Alternate which animal is "today's" primary source, day to day.
   const idx = dayOfYear(new Date());
   const sources = idx % 2 === 0
     ? [{ label: '🐱', fetcher: fetchCatFacts }, { label: '🐶', fetcher: fetchDogFacts }]
     : [{ label: '🐶', fetcher: fetchDogFacts }, { label: '🐱', fetcher: fetchCatFacts }];
  
+  let fallbackPick = null; // used only if every candidate from both sources has been shown recently
   for(const { label, fetcher } of sources){
     try{
       const facts = await fetcher();
-      const pick = facts.find(f => !ANIMAL_FACT_BLOCKLIST.test(f));
-      if(pick){
-        body.innerHTML = `<div class="history-item">${label} ${pick}</div>`;
+      const clean = facts.filter(f => !ANIMAL_FACT_BLOCKLIST.test(f));
+      const fresh = clean.find(f => !historySet.has(factKey(f)));
+      if(fresh){
+        body.innerHTML = `<div class="history-item">${label} ${fresh}</div>`;
+        history.push(factKey(fresh));
+        saveJSON(FACT_HISTORY_KEY, history.slice(-FACT_HISTORY_MAX));
         return;
       }
+      if(!fallbackPick && clean.length){ fallbackPick = { label, text: clean[0] }; }
     }catch(e){
       console.error('Fact of the Day source failed:', e);
     }
+  }
+  // Every fetched candidate from both sources was already shown recently (rare,
+  // given 30 candidates per source) — better to repeat than show nothing.
+  if(fallbackPick){
+    body.innerHTML = `<div class="history-item">${fallbackPick.label} ${fallbackPick.text}</div>`;
+    return;
   }
   body.innerHTML = '<div class="panel-placeholder">Couldn\'t load a fact right now.</div>';
 }
@@ -934,7 +953,7 @@ const RIDDLES = [
   ['What can you catch but not throw?', 'A cold.'],
   ['What has a head, a tail, is brown, and has no legs?', 'A penny.'],
   ['What comes once in a minute, twice in a moment, but never in a thousand years?', 'The letter M.'],
-  ['What has hands but can\'t clap?', 'A clock.'],
+  ['What follows you everywhere but disappears in the dark?', 'Your shadow.'],
   ['What kind of room has no doors or windows?', 'A mushroom.'],
   ['What invention lets you look right through a wall?', 'A window.'],
   ['What is full of holes but still holds water?', 'A sponge.'],
@@ -946,7 +965,43 @@ const RIDDLES = [
   ['What kind of tree can you carry in your hand?', 'A palm.'],
   ['What has 13 hearts but no other organs?', 'A deck of cards.'],
   ['What is always in front of you but can\'t be seen?', 'The future.'],
-  ['What is so fragile that saying its name breaks it?', 'Silence.']
+  ['What is so fragile that saying its name breaks it?', 'Silence.'],
+  ['What has a ring but no finger?', 'A telephone.'],
+  ['What kind of coat can only be put on wet?', 'A coat of paint.'],
+  ['What can fill a room but takes up no space?', 'Light.'],
+  ['What has a bark but no bite?', 'A tree.'],
+  ['What can you hold without ever touching it?', 'A conversation.'],
+  ['What has legs but doesn\'t walk?', 'A table.'],
+  ['What kind of band never plays music?', 'A rubber band.'],
+  ['What has cities but no houses, forests but no trees, and rivers but no water?', 'A map.'],
+  ['What goes through cities and fields but never moves?', 'A road.'],
+  ['What has a heart that doesn\'t beat?', 'An artichoke.'],
+  ['What can you keep after giving it away?', 'Your word.'],
+  ['What gets bigger the more you take away from it?', 'A hole.'],
+  ['What has a tongue but cannot talk?', 'A shoe.'],
+  ['What has teeth but cannot eat?', 'A zipper.'],
+  ['What goes up and down but stays in the same place?', 'A staircase.'],
+  ['What has four wheels and flies?', 'A garbage truck.'],
+  ['What has a foot but no legs?', 'A ruler.'],
+  ['What kind of cup can\'t hold water?', 'A cupcake.'],
+  ['What starts with a "P," ends with an "E," and has thousands of letters?', 'A Post Office.'],
+  ['What has a golden head and a golden tail but no body?', 'A coin.'],
+  ['What belongs to you but other people use it more than you do?', 'Your name.'],
+  ['What has one head, one foot, and four legs?', 'A bed.'],
+  ['What loses its head in the morning and gets it back at night?', 'A pillow.'],
+  ['What has many keys but can\'t open a single door?', 'A keyboard.'],
+  ['What kind of table has no legs?', 'A timetable.'],
+  ['What flies without wings?', 'Time.'],
+  ['What has branches but no fruit, trunk, or leaves?', 'A bank.'],
+  ['What is easy to get into but hard to get out of?', 'Trouble.'],
+  ['What can be cracked, made, told, and played?', 'A joke.'],
+  ['What kind of ship has two mates but no captain?', 'A relationship.'],
+  ['What is black when clean and white when dirty?', 'A chalkboard.'],
+  ['What has a bill but never pays it?', 'A duck.'],
+  ['What can you see in the middle of March and April that you can\'t see in any other month?', 'The letter R.'],
+  ['What has a heart in its name but no chambers?', 'A sweetheart.'],
+  ['What can you catch that isn\'t thrown, and doesn\'t need hands?', 'The flu.'],
+  ['What kind of key opens no lock but unlocks a song?', 'A musical key.']
 ];
 function dayOfYear(d){
   const start = new Date(d.getFullYear(), 0, 0);
